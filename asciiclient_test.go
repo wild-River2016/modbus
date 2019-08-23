@@ -11,7 +11,7 @@ import (
 
 func TestASCIIEncoding(t *testing.T) {
 	encoder := asciiPackager{}
-	encoder.SlaveId = 17
+	encoder.SlaveID = 17
 
 	pdu := ProtocolDataUnit{}
 	pdu.FunctionCode = 3
@@ -29,7 +29,7 @@ func TestASCIIEncoding(t *testing.T) {
 
 func TestASCIIDecoding(t *testing.T) {
 	decoder := asciiPackager{}
-	decoder.SlaveId = 247
+	decoder.SlaveID = 247
 	adu := []byte(":F7031389000A60\r\n")
 
 	pdu, err := decoder.Decode(adu)
@@ -46,9 +46,31 @@ func TestASCIIDecoding(t *testing.T) {
 	}
 }
 
+func TestASCIIDecodeStartCharacter(t *testing.T) {
+	decoder := asciiPackager{}
+	aduReq := []byte(":010300010002F9\r\n")
+	aduRespGreaterThan := []byte(">010304010F1509CA\r\n")
+	aduRespColon := []byte(":010304010F1509CA\r\n")
+	aduRespFail := []byte("!010304010F1509CA\r\n")
+
+	// Modbus ASCII conform.
+	if err := decoder.Verify(aduReq, aduRespColon); err != nil {
+		t.Fatal(err)
+	}
+
+	// Not Modbus ASCII conform but common in the field.
+	if err := decoder.Verify(aduReq, aduRespGreaterThan); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := decoder.Verify(aduReq, aduRespFail); err == nil {
+		t.Fatalf("expected '%s' to fail but does not", aduRespFail)
+	}
+}
+
 func BenchmarkASCIIEncoder(b *testing.B) {
 	encoder := asciiPackager{
-		SlaveId: 10,
+		SlaveID: 10,
 	}
 	pdu := ProtocolDataUnit{
 		FunctionCode: 1,
@@ -64,7 +86,7 @@ func BenchmarkASCIIEncoder(b *testing.B) {
 
 func BenchmarkASCIIDecoder(b *testing.B) {
 	decoder := asciiPackager{
-		SlaveId: 10,
+		SlaveID: 10,
 	}
 	adu := []byte(":F7031389000A60\r\n")
 	for i := 0; i < b.N; i++ {

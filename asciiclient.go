@@ -12,13 +12,15 @@ import (
 )
 
 const (
-	asciiStart   = ":"
 	asciiEnd     = "\r\n"
 	asciiMinSize = 3
 	asciiMaxSize = 513
 
 	hexTable = "0123456789ABCDEF"
 )
+
+// Modbus ASCII defines ':' but in the field often '>' is seen.
+var asciiStart = []string{":", ">"}
 
 // ASCIIClientHandler implements Packager and Transporter interface.
 type ASCIIClientHandler struct {
@@ -43,7 +45,12 @@ func ASCIIClient(address string) Client {
 
 // asciiPackager implements Packager interface.
 type asciiPackager struct {
-	SlaveId byte
+	SlaveID byte
+}
+
+// SetSlave sets modbus slave id for the next client operations
+func (mb *asciiPackager) SetSlave(slaveID byte) {
+	mb.SlaveID = slaveID
 }
 
 // Encode encodes PDU in a ASCII frame:
@@ -56,10 +63,10 @@ type asciiPackager struct {
 func (mb *asciiPackager) Encode(pdu *ProtocolDataUnit) (adu []byte, err error) {
 	var buf bytes.Buffer
 
-	if _, err = buf.WriteString(asciiStart); err != nil {
+	if _, err = buf.WriteString(asciiStart[0]); err != nil {
 		return
 	}
-	if err = writeHex(&buf, []byte{mb.SlaveId, pdu.FunctionCode}); err != nil {
+	if err = writeHex(&buf, []byte{mb.SlaveID, pdu.FunctionCode}); err != nil {
 		return
 	}
 	if err = writeHex(&buf, pdu.Data); err != nil {
@@ -68,7 +75,7 @@ func (mb *asciiPackager) Encode(pdu *ProtocolDataUnit) (adu []byte, err error) {
 	// Exclude the beginning colon and terminating CRLF pair characters
 	var lrc lrc
 	lrc.reset()
-	lrc.pushByte(mb.SlaveId).pushByte(pdu.FunctionCode).pushBytes(pdu.Data)
+	lrc.pushByte(mb.SlaveID).pushByte(pdu.FunctionCode).pushBytes(pdu.Data)
 	if err = writeHex(&buf, []byte{lrc.value()}); err != nil {
 		return
 	}
@@ -93,8 +100,8 @@ func (mb *asciiPackager) Verify(aduRequest []byte, aduResponse []byte) (err erro
 		return
 	}
 	// First char must be a colon
-	str := string(aduResponse[0:len(asciiStart)])
-	if str != asciiStart {
+	str := string(aduResponse[0:len(asciiStart[0])])
+	if !isStartCharacter(str) {
 		err = fmt.Errorf("modbus: response frame '%v'... is not started with '%v'", str, asciiStart)
 		return
 	}
@@ -173,7 +180,7 @@ func (mb *asciiSerialTransporter) Send(aduRequest []byte) (aduResponse []byte, e
 	mb.serialPort.startCloseTimer()
 
 	// Send the request
-	mb.serialPort.logf("modbus: sending %q\n", aduRequest)
+	mb.serialPort.logf("modbus: send % x\n", aduRequest)
 	if _, err = mb.port.Write(aduRequest); err != nil {
 		return
 	}
@@ -197,7 +204,7 @@ func (mb *asciiSerialTransporter) Send(aduRequest []byte) (aduResponse []byte, e
 		}
 	}
 	aduResponse = data[:length]
-	mb.serialPort.logf("modbus: received %q\n", aduResponse)
+	mb.serialPort.logf("modbus: recv % x\n", aduResponse)
 	return
 }
 
@@ -224,4 +231,14 @@ func readHex(data []byte) (value byte, err error) {
 	}
 	value = dst[0]
 	return
+}
+
+// isStartCharacter confirms that the given character is a Modbus ASCII start character.
+func isStartCharacter(str string) bool {
+	for i := range asciiStart {
+		if str == asciiStart[i] {
+			return true
+		}
+	}
+	return false
 }
