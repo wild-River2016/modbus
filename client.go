@@ -36,6 +36,10 @@ func NewClient2(packager Packager, transporter Transporter) Client {
 	return &client{packager: packager, transporter: transporter}
 }
 
+func (mb *client) ResetSlaveID(slaveID byte) {
+	mb.packager.SetSlave(slaveID)
+}
+
 // Request:
 //  Function code         : 1 byte (0x01)
 //  Starting address      : 2 bytes

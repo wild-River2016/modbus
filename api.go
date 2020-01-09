@@ -6,6 +6,8 @@ package modbus
 
 // Client declares the functionality of a Modbus client regardless of the underlying transport stream.
 type Client interface {
+	// resetSlaveID
+	ResetSlaveID(slaveID byte)
 	// Bit access
 
 	// ReadCoils reads from 1 to 2000 contiguous status of coils in a
