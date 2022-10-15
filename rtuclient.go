@@ -264,16 +264,49 @@ func (mb *rtuSerialTransporter) Send(aduRequest []byte) (aduResponse []byte, err
 		mb.serialPort.close()
 		return
 	}
-	//function := aduRequest[1]
-	//functionFail := aduRequest[1] & 0x80
+	function := aduRequest[1]
+	functionFail := aduRequest[1] & 0x80
 	bytesToRead := calculateResponseLength(aduRequest)
 	time.Sleep(mb.calculateDelay(len(aduRequest) + bytesToRead))
 
-	mb.mu.Lock()
-	defer mb.mu.Unlock()
-	data, err := readIncrementally(aduRequest[0], aduRequest[1], mb.port, time.Now().Add(mb.serialPort.Config.Timeout))
-	mb.serialPort.logf("modbus: recv % x\n", data[:])
-	aduResponse = data
+	//mb.mu.Lock()
+	//defer mb.mu.Unlock()
+	//data, err := readIncrementally(aduRequest[0], aduRequest[1], mb.port, time.Now().Add(mb.serialPort.Config.Timeout))
+	//mb.serialPort.logf("modbus: recv % x\n", data[:])
+	//aduResponse = data
+	var n int
+	var n1 int
+	var data [rtuMaxSize]byte
+	//We first read the minimum length and then read either the full package
+	//or the error package, depending on the error status (byte 2 of the response)
+	n, err = io.ReadAtLeast(mb.port, data[:], rtuMinSize)
+	if err != nil {
+		return
+	}
+	//if the function is correct
+	if data[1] == function {
+		//we read the rest of the bytes
+		if n < bytesToRead {
+			if bytesToRead > rtuMinSize && bytesToRead <= rtuMaxSize {
+				if bytesToRead > n {
+					n1, err = io.ReadFull(mb.port, data[n:bytesToRead])
+					n += n1
+				}
+			}
+		}
+	} else if data[1] == functionFail {
+		//for error we need to read 5 bytes
+		if n < rtuExceptionSize {
+			n1, err = io.ReadFull(mb.port, data[n:rtuExceptionSize])
+		}
+		n += n1
+	}
+
+	if err != nil {
+		return
+	}
+	aduResponse = data[:n]
+	mb.serialPort.logf("modbus: received % x\n", aduResponse)
 	return
 }
 
